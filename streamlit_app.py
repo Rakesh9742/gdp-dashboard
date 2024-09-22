@@ -1,151 +1,84 @@
-import streamlit as st
 import pandas as pd
-import math
-from pathlib import Path
+import matplotlib.pyplot as plt
+import seaborn as sns
+import streamlit as st
 
-# Set the title and favicon that appear in the Browser's tab bar.
-st.set_page_config(
-    page_title='GDP dashboard',
-    page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
+# Load dataset
+data = pd.read_csv('k project/NIRF20.3 - nirf1234.csv')
+
+# Convert Institute column to string and remove NaN or non-string values
+data['Institute'] = data['Institute'].astype(str)
+data = data[data['Institute'].notna() & data['Institute'] != 'nan']
+
+# Sort institutes alphabetically
+sorted_institutes = sorted(data['Institute'].unique())
+
+# Streamlit app
+st.title('Institute Performance Dashboard')
+
+# Dropdown for selecting institute
+selected_institute = st.selectbox('Select Institute:', sorted_institutes)
+
+# Dropdown for selecting view option
+view_option = st.selectbox(
+    'Select View:',
+    ['Institute Info', 'Year-wise Graphs', 'Rank Impact Analysis'],
+    index=1  # Default to 'Year-wise Graphs'
 )
 
-# -----------------------------------------------------------------------------
-# Declare some useful functions.
+# Function to display institute data
+def display_institute_data(institute, view_option):
+    if institute:
+        # Filter data for the selected institute
+        institute_data = data[data['Institute'] == institute]
 
-@st.cache_data
-def get_gdp_data():
-    """Grab GDP data from a CSV file.
+        if view_option == 'Institute Info':
+            # Display the Institute Rank and Year
+            rank_year_data = institute_data[['Year', 'Rank']]
+            st.subheader(f"Rank and Year for {institute}")
+            st.dataframe(rank_year_data)
 
-    This uses caching to avoid having to read the file every time. If we were
-    reading from an HTTP endpoint instead of a file, it's a good idea to set
-    a maximum age to the cache with the TTL argument: @st.cache_data(ttl='1d')
-    """
+        elif view_option == 'Year-wise Graphs':
+            # Plot year-wise trends for each parameter
+            parameters = ['SS', 'FSR', 'FQE', 'FRU', 'PU', 'QP', 'IPR', 'FPPP', 'GPH', 'GUE', 'MS', 'GPHD', 'RD', 'WD', 'ESCS', 'PCS', 'PR']
 
-    # Instead of a CSV on disk, you could read from an HTTP endpoint here too.
-    DATA_FILENAME = Path(__file__).parent/'data/gdp_data.csv'
-    raw_gdp_df = pd.read_csv(DATA_FILENAME)
+            for param in parameters:
+                plt.figure(figsize=(8, 5))
+                sns.lineplot(x='Year', y=param, data=institute_data, marker='o')
+                plt.title(f'Year-wise trend of {param} for {institute}')
+                st.pyplot(plt)
+                plt.clf()
 
-    MIN_YEAR = 1960
-    MAX_YEAR = 2022
+        elif view_option == 'Rank Impact Analysis':
+            # Perform correlation analysis between rank and other parameters
+            parameters = ['SS', 'FSR', 'FQE', 'FRU', 'PU', 'QP', 'IPR', 'FPPP', 'GPH', 'GUE', 'MS', 'GPHD', 'RD', 'WD', 'ESCS', 'PCS', 'PR']
 
-    # The data above has columns like:
-    # - Country Name
-    # - Country Code
-    # - [Stuff I don't care about]
-    # - GDP for 1960
-    # - GDP for 1961
-    # - GDP for 1962
-    # - ...
-    # - GDP for 2022
-    #
-    # ...but I want this instead:
-    # - Country Name
-    # - Country Code
-    # - Year
-    # - GDP
-    #
-    # So let's pivot all those year-columns into two: Year and GDP
-    gdp_df = raw_gdp_df.melt(
-        ['Country Code'],
-        [str(x) for x in range(MIN_YEAR, MAX_YEAR + 1)],
-        'Year',
-        'GDP',
-    )
+            # Check if Rank and Parameters have numeric data
+            institute_data_numeric = institute_data[['Rank'] + parameters].dropna()
+            if not institute_data_numeric.empty:
+                correlation = institute_data_numeric.corr()['Rank'].drop('Rank')
 
-    # Convert years from string to integers
-    gdp_df['Year'] = pd.to_numeric(gdp_df['Year'])
+                # Select only high impact correlations (absolute value > 0.5)
+                high_impact = correlation[abs(correlation) > 0.5].sort_values(ascending=False)
 
-    return gdp_df
+                if not high_impact.empty:
+                    # Display correlation values in a simple bar chart
+                    plt.figure(figsize=(8, 5))
+                    sns.barplot(x=high_impact.index, y=high_impact.values, palette="coolwarm")
+                    plt.xticks(rotation=45, ha='right')
+                    plt.title(f'Parameters Impacting Rank for {institute}')
+                    plt.ylabel('Correlation with Rank')
+                    st.pyplot(plt)
 
-gdp_df = get_gdp_data()
+                    # Interpretation for user
+                    st.subheader(f"Parameters with strong impact on rank for {institute}")
+                    for param, value in high_impact.items():
+                        impact_type = "positive" if value > 0 else "negative"
+                        st.write(f" - {param}: {impact_type} impact (correlation: {value:.2f})")
+                else:
+                    st.write(f"No significant parameters impacting the rank for {institute} (correlation threshold: 0.5).")
+            else:
+                st.write(f"No numerical data available for correlation analysis for {institute}.")
 
-# -----------------------------------------------------------------------------
-# Draw the actual page
-
-# Set the title that appears at the top of the page.
-'''
-# :earth_americas: GDP dashboard
-
-Browse GDP data from the [World Bank Open Data](https://data.worldbank.org/) website. As you'll
-notice, the data only goes to 2022 right now, and datapoints for certain years are often missing.
-But it's otherwise a great (and did I mention _free_?) source of data.
-'''
-
-# Add some spacing
-''
-''
-
-min_value = gdp_df['Year'].min()
-max_value = gdp_df['Year'].max()
-
-from_year, to_year = st.slider(
-    'Which years are you interested in?',
-    min_value=min_value,
-    max_value=max_value,
-    value=[min_value, max_value])
-
-countries = gdp_df['Country Code'].unique()
-
-if not len(countries):
-    st.warning("Select at least one country")
-
-selected_countries = st.multiselect(
-    'Which countries would you like to view?',
-    countries,
-    ['DEU', 'FRA', 'GBR', 'BRA', 'MEX', 'JPN'])
-
-''
-''
-''
-
-# Filter the data
-filtered_gdp_df = gdp_df[
-    (gdp_df['Country Code'].isin(selected_countries))
-    & (gdp_df['Year'] <= to_year)
-    & (from_year <= gdp_df['Year'])
-]
-
-st.header('GDP over time', divider='gray')
-
-''
-
-st.line_chart(
-    filtered_gdp_df,
-    x='Year',
-    y='GDP',
-    color='Country Code',
-)
-
-''
-''
-
-
-first_year = gdp_df[gdp_df['Year'] == from_year]
-last_year = gdp_df[gdp_df['Year'] == to_year]
-
-st.header(f'GDP in {to_year}', divider='gray')
-
-''
-
-cols = st.columns(4)
-
-for i, country in enumerate(selected_countries):
-    col = cols[i % len(cols)]
-
-    with col:
-        first_gdp = first_year[first_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-        last_gdp = last_year[last_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-
-        if math.isnan(first_gdp):
-            growth = 'n/a'
-            delta_color = 'off'
-        else:
-            growth = f'{last_gdp / first_gdp:,.2f}x'
-            delta_color = 'normal'
-
-        st.metric(
-            label=f'{country} GDP',
-            value=f'{last_gdp:,.0f}B',
-            delta=growth,
-            delta_color=delta_color
-        )
+# Call the function to display data
+display_institute_data(selected_institute, view_option)
