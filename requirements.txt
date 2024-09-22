@@ -2,4 +2,6 @@ matplotlib
 pandas
 seaborn
 streamlit
+ipython
+
 
