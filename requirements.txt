@@ -3,5 +3,6 @@ pandas
 seaborn
 streamlit
 ipython
+ipywidgets
 
 
