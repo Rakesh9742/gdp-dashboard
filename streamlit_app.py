@@ -5,7 +5,6 @@ import streamlit as st
 
 # Load dataset
 data = pd.read_csv('NIRF20.3 - nirf1234.csv')
-
 # Convert Institute column to string and remove NaN or non-string values including "nan"
 data['Institute'] = data['Institute'].astype(str)
 data = data[data['Institute'].notna() & data['Institute'] != 'nan']
@@ -42,14 +41,32 @@ def display_institute_data(institute, view_option, selected_param):
         institute_data = data[data['Institute'] == institute]
 
         if view_option == 'Year-wise Graphs':
-            # Sort Year and plot year-wise trend for the selected parameter
+            # Sort by Year but keep the original parameter values
             institute_data = institute_data.sort_values('Year')
-            plt.figure(figsize=(8, 5))
-            sns.lineplot(x='Year', y=selected_param, data=institute_data, marker='o')
-            plt.xticks(sorted(institute_data['Year'].unique()))  # Ensure x-axis is in increasing order
-            plt.title(f'Year-wise trend of {selected_param} for {institute}')
-            plt.tight_layout()
-            st.pyplot(plt)
+
+            # Convert the selected parameter column to numeric, forcing errors to NaN
+            institute_data[selected_param] = pd.to_numeric(institute_data[selected_param], errors='coerce')
+
+            # Drop rows with NaN values in the selected parameter column
+            institute_data = institute_data.dropna(subset=[selected_param])
+
+            # Ensure we have valid data to plot
+            if not institute_data.empty:
+                plt.figure(figsize=(8, 5))
+                sns.lineplot(x='Year', y=selected_param, data=institute_data, marker='o')
+
+                # Ensure x-axis is sorted by Year, y-axis shows actual values
+                plt.xticks(sorted(institute_data['Year'].unique()))  # Ensure x-axis is in increasing order
+                plt.title(f'Year-wise trend of {selected_param} for {institute}')
+                
+                # Correct the y-axis scaling and ensure no misrepresentation
+                plt.ylim(institute_data[selected_param].min() - 0.5, institute_data[selected_param].max() + 0.5)
+                plt.yticks(sorted(institute_data[selected_param].unique()))  # Ensure y-axis shows correct values
+
+                plt.tight_layout()
+                st.pyplot(plt)
+            else:
+                st.write(f"No valid data to display for {selected_param} in {institute}.")
 
         elif view_option == 'Rank Impact Analysis':
             # Perform correlation analysis between rank and the selected parameter
