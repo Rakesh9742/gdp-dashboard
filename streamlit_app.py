@@ -6,48 +6,47 @@ import streamlit as st
 # Load dataset
 data = pd.read_csv('NIRF20.3 - nirf1234.csv')
 
-# Convert Institute column to string and remove NaN or non-string values
+# Convert Institute column to string and remove NaN or non-string values including "nan"
 data['Institute'] = data['Institute'].astype(str)
 data = data[data['Institute'].notna() & data['Institute'] != 'nan']
 
-# Sort institutes alphabetically
+# Sort institutes alphabetically and remove "nan" from the dropdown
 sorted_institutes = sorted(data['Institute'].unique())
 
 # Streamlit app layout
 st.title("Institute Data Analysis")
 
+# Create separate menu for Institute Info
+menu = ['Institute Info', 'Data Analysis']
+selected_menu = st.selectbox("Select Menu", menu)
+
 # Dropdown for selecting institute
 institute = st.selectbox('Select Institute', sorted_institutes)
-
-# Dropdown for selecting view option (either show institution info, year-wise graphs, or rank impact analysis)
-view_option = st.selectbox(
-    'Select View Option', 
-    ['Institute Info', 'Year-wise Graphs', 'Rank Impact Analysis'],
-    index=1  # Default view is 'Year-wise Graphs'
-)
 
 # List of parameters
 parameters = ['SS', 'FSR', 'FQE', 'FRU', 'PU', 'QP', 'IPR', 'FPPP', 'GPH', 'GUE', 'MS', 'GPHD', 'RD', 'WD', 'ESCS', 'PCS', 'PR']
 
 # Dropdown for selecting parameter
-selected_param = st.selectbox('Select Parameter', parameters, index=0)
+if selected_menu == 'Data Analysis':
+    view_option = st.selectbox(
+        'Select View Option',
+        ['Year-wise Graphs', 'Rank Impact Analysis'],
+        index=0  # Default view is 'Year-wise Graphs'
+    )
+    selected_param = st.selectbox('Select Parameter', parameters, index=0)
 
-# Function to display either institute info (Rank and Year) or perform rank impact analysis
+# Function to display year-wise graph or rank impact analysis
 def display_institute_data(institute, view_option, selected_param):
     if institute:
         # Filter data for the selected institute
         institute_data = data[data['Institute'] == institute]
 
-        if view_option == 'Institute Info':
-            # Display the Institute Rank and Year
-            rank_year_data = institute_data[['Year', 'Rank']]
-            st.write(f"Rank and Year for {institute}:")
-            st.dataframe(rank_year_data)
-
-        elif view_option == 'Year-wise Graphs':
-            # Plot year-wise trend for the selected parameter
+        if view_option == 'Year-wise Graphs':
+            # Sort Year and plot year-wise trend for the selected parameter
+            institute_data = institute_data.sort_values('Year')
             plt.figure(figsize=(8, 5))
             sns.lineplot(x='Year', y=selected_param, data=institute_data, marker='o')
+            plt.xticks(sorted(institute_data['Year'].unique()))  # Ensure x-axis is in increasing order
             plt.title(f'Year-wise trend of {selected_param} for {institute}')
             plt.tight_layout()
             st.pyplot(plt)
@@ -73,6 +72,25 @@ def display_institute_data(institute, view_option, selected_param):
             else:
                 st.write(f"No numerical data available for correlation analysis for {institute}.")
 
-# Display the results based on selected options
-display_institute_data(institute, view_option, selected_param)
+# Function to display institute rank and year info
+def display_institute_info(institute):
+    if institute:
+        # Filter data for the selected institute
+        institute_data = data[data['Institute'] == institute]
+        
+        # Select only 'Year' and 'Rank' columns and sort by 'Year'
+        rank_year_data = institute_data[['Year', 'Rank']].sort_values('Year')
+        
+        # Reset index to remove index column
+        rank_year_data = rank_year_data.reset_index(drop=True)
+        
+        # Display the filtered data as a table with only 'Year' and 'Rank'
+        st.write(f"Rank and Year for {institute}:")
+        st.dataframe(rank_year_data, use_container_width=True)  # Use Streamlit dataframe for a clean display
+
+# Display based on selected menu
+if selected_menu == 'Data Analysis':
+    display_institute_data(institute, view_option, selected_param)
+elif selected_menu == 'Institute Info':
+    display_institute_info(institute)
 
