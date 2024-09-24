@@ -4,7 +4,7 @@ import seaborn as sns
 import streamlit as st
 
 # Load dataset
-data = pd.read_csv('NIRF20.3 - nirf1234.csv')
+data = pd.read_csv('NIRF edited..csv')
 # Convert Institute column to string and remove NaN or non-string values including "nan"
 data['Institute'] = data['Institute'].astype(str)
 data = data[data['Institute'].notna() & data['Institute'] != 'nan']
